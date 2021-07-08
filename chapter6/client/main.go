@@ -3,72 +3,65 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"strconv"
 )
 
 func main() {
-	conn, err := net.Dial("tcp", "localhost:8080")
+	sendMessages := []string{
+		"ASCII",
+		"PROGRAMMING",
+		"PLUS",
+	}
+	var conn net.Conn = nil
+	var err error
+	requests := make([]*http.Request, 0, len(sendMessages))
+
+	conn, err = net.Dial("tcp", "localhost:8080")
 	if err != nil {
 		panic(err)
 	}
 	defer conn.Close()
+	fmt.Printf("Access\n")
 
-	// create POST request
-	request, err := http.NewRequest(
-		"POST",
-		"http://localhost:8080",
-		nil,
-	)
-	if err != nil {
-		panic(err)
-	}
+	// send a request ahead of time
+	for i := 0; i < len(sendMessages); i++ {
+		lastMessage := i == len(sendMessages)-1
 
-	err = request.Write(conn)
-	if err != nil {
-		panic(err)
-	}
-
-	// read from server
-	reader := bufio.NewReader(conn)
-	response, err := http.ReadResponse(reader, request)
-	if err != nil {
-		panic(err)
-	}
-
-	// view result
-	dump, err := httputil.DumpResponse(response, false)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(string(dump))
-
-	if len(response.TransferEncoding) < 1 || response.TransferEncoding[0] != "chunked" {
-		panic("wrong transfer encoding")
-	}
-
-	for {
-		// obtain size
-		sizeStr, err := reader.ReadBytes('\n')
-		if err == io.EOF {
-			break
-		}
-		// parse hexadecimal format size
-		// close if size is zero
-		size, err := strconv.ParseInt(string(sizeStr[:len(sizeStr)-2]), 16, 24)
-		if size == 0 {
-			break
+		request, err := http.NewRequest(
+			"GET",
+			"http://localhost:8080?message="+sendMessages[i],
+			nil,
+		)
+		if lastMessage {
+			request.Header.Add("Connection", "close")
+		} else {
+			request.Header.Add("Connection", "keep-alive")
 		}
 		if err != nil {
 			panic(err)
 		}
-		// allocate a buffer for the number of sizes and read
-		line := make([]byte, int(size))
-		io.ReadFull(reader, line)
-		reader.Discard(2)
-		fmt.Printf("  %d bytes: %s\n", size, string(line))
+
+		err = request.Write(conn)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("send: ", sendMessages[i])
+		requests = append(requests, request)
+	}
+
+	// receive all responses
+	reader := bufio.NewReader(conn)
+	for _, request := range requests {
+		response, err := http.ReadResponse(reader, request)
+		if err != nil {
+			panic(err)
+		}
+		dump, err := httputil.DumpResponse(response, true)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(string(dump))
 	}
 }
