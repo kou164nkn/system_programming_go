@@ -25,7 +25,8 @@
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -98,5 +99,3 @@ tags
 
 # Local History for Visual Studio Code
 .history/
-
-
